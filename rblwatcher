@@ -5,7 +5,9 @@
 # Returns nothing by default
 # TODO: mix of domains and hosts
 
-import sys, os, getopt, socket, string, getopt, re
+from optparse import OptionParser
+
+import sys, os, getopt, socket, string, re
 # Require: apt-get install python-dns
 import DNS
 
@@ -20,7 +22,7 @@ rbl_list = [ "bl.spamcop.net", "zen.spamhaus.org", "b.barracudacentral.org", \
 # mail domains to test
 #domains = [ "gmail.com" ]
 
-def test_rbl_list (testrecord="127.0.0.2", do_log=0):
+def test_rbl_list (testrecord="127.0.0.2", do_log=False):
 	"""test if 2.0.0.127.rbl.list record exist on RBL"""
 	"""this avoid mistaken RBL definition"""
 	"""(as the check is ok if no 127.0.0.2 record is returned, we're not sure"""
@@ -36,7 +38,7 @@ def test_rbl_list (testrecord="127.0.0.2", do_log=0):
 		except socket.error:
 			print "Warning: lookup %s failed on %s rbl." % (check_name, rbl)
 
-def check_rbl_domain (domains, do_log=0):
+def check_rbl_domain (domains, do_log=False):
 	"""discover all mx of a domain and check rbl status"""
 	"""to easily check if smtp changes over the time"""
 	for domain in domains:
@@ -62,30 +64,31 @@ def check_rbl_domain (domains, do_log=0):
 				if check_addr != None:
 					print "%s [%s] seems to be listed in %s (%s -> %s)" % (mx[1], addr, rbl, check_name, check_addr)
 
-def check_rbl_host (host, do_log=0):
+def check_rbl_host (hosts, do_log=False):
 	"""test if a host address is listed on a RBL list"""
-	try:
-		# try to resolve ip if fqdn given
-		if do_log: print "Trying to resolve %s" % host
-		ipaddress = socket.gethostbyname(host)
-		if ipaddress != host:
-			if do_log: print "Host %s resolves to %s" % (host, ipaddress)
+	for host in hosts:
+		try:
+			# try to resolve ip if fqdn given
+			if do_log: print "Trying to resolve %s" % host
+			ipaddress = socket.gethostbyname(host)
+			if ipaddress != host:
+				if do_log: print "Host %s resolves to %s" % (host, ipaddress)
 
-		addr_parts = string.split(ipaddress, '.')
-		addr_parts.reverse()
-		for rbl in rbl_list:
-			check_name = "%s.%s" % (string.join(addr_parts, '.'), rbl)
-			# try to resolve the reverse + list(ex: 117.38.23.94.bl.spamcop.net)
-			# return 127.0.0.x, depending on the list
-			try: check_addr = socket.gethostbyname(check_name)
-			# if it returns nothing, it's ok
-			except socket.error:
-				check_addr = None
-				if do_log:
-					print "No returns for %s on %s (%s)" % (check_name, rbl, check_addr)
-			if check_addr != None:
-				print "%s seems to be listed in %s (%s -> %s)" % (ipaddress, rbl, check_name, check_addr)
-	except socket.error: print "Name or service not known"
+			addr_parts = string.split(ipaddress, '.')
+			addr_parts.reverse()
+			for rbl in rbl_list:
+				check_name = "%s.%s" % (string.join(addr_parts, '.'), rbl)
+				# try to resolve the reverse + list(ex: 117.38.23.94.bl.spamcop.net)
+				# return 127.0.0.x, depending on the list
+				try: check_addr = socket.gethostbyname(check_name)
+				# if it returns nothing, it's ok
+				except socket.error:
+					check_addr = None
+					if do_log:
+						print "No returns for %s on %s (%s)" % (check_name, rbl, check_addr)
+				if check_addr != None:
+					print "%s seems to be listed in %s (%s -> %s)" % (ipaddress, rbl, check_name, check_addr)
+		except socket.error: print "Name or service not known"
 	
 
 def is_ipv4_address(ipaddress):
@@ -103,53 +106,57 @@ def is_dns_domain(domain):
 	if m: return True
 	return False
 
-def usage():
-	print " ", sys.argv[0], ": check if smtp servers are in RBL lists"
-	print ""
-	print sys.argv[0], " [-h|--help] [-v|--verbose] [-c|--check-rbl] [-h|--host]"
-	print """
-  -h | --help		print this message
-  -v | --verbose	verbose output (used as first arg)
-  -c | --check-rbl	check configured RBL (test 127.0.0.2 result) only and exit
-  -d | --domain		dns domain name to test (detect MX and test it)
-  -a | --host		host to test (FQDN or ip address)
-
-Important note: argument must be passed in this order to be recognized.
-"""
+def cb(option, opt_str, value, parser):
+	"""Callback to have multiple args in list"""
+	args=[]
+	for arg in parser.rargs:
+		if arg[0] != "-":
+			args.append(arg)
+		else:
+			del parser.rargs[:len(args)]
+			break
+	if getattr(parser.values, option.dest):
+		args.extend(getattr(parser.values, option.dest))
+	setattr(parser.values, option.dest, args)
 
 def main():
 
-	# use of argparse maybe a good idea, but argparse not in 
-	# python 2.7 as Debian lenny provide 2.5
-	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hcvd:a:", ["help","check-rbl", "verbose", "domain", "host"])
-	except getopt.GetoptError, err:
-		print str(err)
-		usage()
-		sys.exit(2)
-	verbose = 0
+	usage = "Usage: %prog [options] arg1 arg2"
+	description = "Check if smtp servers are in RBL lists"
+	parser = OptionParser(usage, description=description)
 
-	for o, a in opts:
-		if o in ("-v", "--verbose"):
-			verbose = 1
-		elif o in ("-c", "--check-rbl"):
-			test_rbl_list(do_log=verbose)
-			sys.exit()
-		elif o in ("-h", "--help"):
-			usage()
-			sys.exit()
-		elif o in ("-d", "--domain"):
-			#if not is_dns_domain(a):
-			check_rbl_domain(a,do_log=verbose)
-		elif o in ("-a", "--host"):
-			check_rbl_host(a,do_log=verbose)
-			sys.exit()
-		else:
-			assert False, "unhandled option"
+	parser.add_option("-v", "--verbose",
+			  action="store_true",
+			  help="Verbose output")
 
-	#test_rbl_list(do_log=verbose)
-	#check_rbl_domain(domains, do_log=verbose)
+	parser.add_option("-c", "--check-rbl",
+			  action="store_true",
+			  dest="check",
+			  help="Check configured RBL (test 127.0.0.2) only and exit")
 
+	parser.add_option("-d", "--domains",
+			  action="callback",
+			  callback=cb,
+			  dest="domains",
+			  help="Test ip address of MX(s) on specified domain(s)")
+
+	parser.add_option("-s", "--servers",
+			  action="callback",
+			  callback=cb,
+			  dest="servers",
+			  help="Server(s) address to test (FQDN or ip address)")
+
+	(options, args) = parser.parse_args()
+
+	if options.check:
+		test_rbl_list(do_log=options.verbose)
+
+	if options.domains:
+		check_rbl_domain(options.domains,do_log=options.verbose)
+
+	if options.servers:
+		check_rbl_host(options.servers,do_log=options.verbose)
+		
 if __name__ == "__main__":
 	main ()
 
