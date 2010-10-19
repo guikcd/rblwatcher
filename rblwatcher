@@ -20,9 +20,15 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from optparse import OptionParser
+from optparse import OptionParser, Option
+# hack to callback to take metavar value
+Option.ALWAYS_TYPED_ACTIONS += ('callback',)
 import sys, os, getopt, socket, string, re
-import DNS
+try:
+	import DNS
+except ImportError:
+	print "Error importing DNS, is python-dns installed ?"
+	sys.exit(1)
 
 # list of RBL to use
 rbl_list = [ "bl.spamcop.net", "zen.spamhaus.org", "b.barracudacentral.org", \
@@ -126,21 +132,26 @@ def main():
 	parser.add_option("-c", "--check-rbl",
 			  action="store_true",
 			  dest="check",
-			  help="Check configured RBL (test 127.0.0.2) only and exit")
+			  help="Check (test 127.0.0.2) configured RBL only and exit")
 
 	parser.add_option("-d", "--domains",
 			  action="callback",
 			  callback=cb,
+			  metavar="domain1 [domain2 ...]",
 			  dest="domains",
 			  help="Test ip address of MX(s) on specified domain(s)")
 
 	parser.add_option("-s", "--servers",
 			  action="callback",
 			  callback=cb,
+			  metavar="server1 [server2 ...]",
 			  dest="servers",
 			  help="Server(s) address to test (FQDN or ip address)")
 
 	(options, args) = parser.parse_args()
+
+	if len(args) == 0:
+		parser.error("Please give arguments; -h, --help for details")
 
 	if options.check:
 		test_rbl_list(do_log=options.verbose)
