@@ -81,7 +81,7 @@ def check_rbl_domain (domains, do_log=False):
 						print "%s [%s] seems to be listed in %s (%s -> %s)" % (mx[1], addr, rbl, check_name, check_addr)
 		else:
 			print "No MX found for %s domain" % domain
-			return 1
+			# TODO return
 
 def check_rbl_host (hosts, do_log=False):
 	"""test if a host address is listed on a RBL list"""
@@ -142,6 +142,8 @@ if __name__ == "__main__":
 			  help="Comma separated list of server(s) to test (FQDN or ip address)")
 
 	(options, args) = parser.parse_args()
+
+	# TODO: call -s and -d together
 
 	# FIXME
 	if options.check:
