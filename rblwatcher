@@ -1,0 +1,115 @@
+#!/usr/bin/python
+# based on http://www.fiction.net/blong/programs/python/rbl.py
+# Watch if smtp server(s) of a mail domain is listed in a RBL
+# Returns nothing by default
+# TODO: mix of domains and hosts
+
+import sys, os, getopt, socket, string, getopt
+# Require: apt-get install python-dns
+import DNS
+
+# list of RBL to use
+rbl_list = [ "bl.spamcop.net", "zen.spamhaus.org", "b.barracudacentral.org", \
+	"ips.backscatterer.org", "combined.njabl.org", "psbl.surriel.com", \
+	"dnsbl.sorbs.net", "combined.rbl.msrbl.net", \
+	"dnsbl-1.uceprotect.net", "bl.spamcannibal.org" ]
+
+# escalation netbloc lists: dnsbl-2.uceprotect.net, dnsbl-3.uceprotect.net, spam.dnsbl.sorbs.net
+
+# mail domains to test
+domains = [ "iroqwa.org", "google.fr" ]
+
+
+# test if 2.0.0.127.rbl.list record exist on RBL
+# this avoid mistaken RBL definition
+# (as the check is ok if no 127.0.0.2 record is returned, we're not sure
+# rbl is correct or not)
+def test_rbl_list (do_log=0,testrecord="127.0.0.2"):
+	for rbl in rbl_list:
+		try:
+			addr_parts = string.split(testrecord, '.')
+			addr_parts.reverse()
+			check_name = "%s.%s" % (string.join(addr_parts, '.'), rbl)
+			check_addr = socket.gethostbyname(check_name)
+		except socket.error:
+			print "Warning: lookup %s failed on %s rbl." % (check_name, rbl)
+		if do_log:
+			print "OK: %s returns %s for %s" % (rbl, check_addr, check_name)
+
+# discover all mx of a domain and check rbl status
+# to easily check if smtp changes over the time
+def check_rbl_domain (domains, do_log=0):
+	for domain in domains:
+		# MX lookup to get all smtp server
+		DNS.DiscoverNameServers()
+		mx_hosts = DNS.mxlookup(domain)
+		for mx in mx_hosts:
+			addr = socket.gethostbyname(mx[1])
+			if do_log: print "Host %s resolves to %s" % (mx[1], addr)
+			# generate IPv4 reverse
+			addr_parts = string.split(addr, '.')
+			addr_parts.reverse()
+			for rbl in rbl_list:
+				check_name = "%s.%s" % (string.join(addr_parts, '.'), rbl)
+				# try to resolv the reverse + list(ex: 117.38.23.94.bl.spamcop.net)
+				# return 127.0.0.x, depending on the list
+				try: check_addr = socket.gethostbyname(check_name)
+				# if it returns nothing, it's ok
+				except socket.error:
+					check_addr = None
+					if do_log:
+						print "No returns for %s on %s (%s)" % (check_name, rbl, check_addr)
+				if check_addr != None:
+					print "%s [%s] seems to be listed in %s (%s -> %s)" % (mx[1], addr, rbl, check_name, check_addr)
+
+def usage():
+	print " ", sys.argv[0], ": check smtp servers in RBL lists"
+	print ""
+	print sys.argv[0], " [-h|--help] [-v|--verbose] [-c|--check-rbl]"
+	print """
+  -h | --help		print this message
+  -v | --verbose	verbose output
+  -c | --check-rbl	check configured RBL (test 127.0.0.2 result) only and exit
+
+Important note: argument must be passed in this order to be recognized.
+"""
+
+def main():
+
+	# use of argparse maybe a good idea, but argparse not in 
+	# python 2.7 as Debian lenny provide 2.5
+	try:
+		opts, args = getopt.getopt(sys.argv[1:], "hcv", ["help","check-rbl", "verbose"])
+	except getopt.GetoptError, err:
+		print str(err)
+		usage()
+		sys.exit(2)
+	verbose = 0
+
+	for o, a in opts:
+		if o in ("-v", "--verbose"):
+			verbose = 1
+		elif o in ("-c", "--check-rbl"):
+			test_rbl_list(do_log=verbose)
+			sys.exit()
+		elif o in ("-h", "--help"):
+			usage()
+			sys.exit()
+		else:
+			assert False, "unhandled option"
+
+	test_rbl_list(do_log=verbose)
+	check_rbl_domain(domains, do_log=verbose)
+
+if __name__ == "__main__":
+	main ()
+
+# dns lookup
+#	DNS.DiscoverNameServers()
+#	request= DNS.DnsRequest(name='www.iroqwa.org', qtype='A')
+#	try:	
+#		result = request.req()
+#		print result.answers
+#	except DNS.Error:
+#		print "error"
+
