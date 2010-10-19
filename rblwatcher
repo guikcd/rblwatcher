@@ -21,8 +21,6 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from optparse import OptionParser, Option
-# hack to callback to take metavar value
-Option.ALWAYS_TYPED_ACTIONS += ('callback',)
 import sys, os, getopt, socket, string, re
 try:
 	import DNS
@@ -31,7 +29,8 @@ except ImportError:
 	sys.exit(1)
 
 # list of RBL to use
-rbl_list = [ "bl.spamcop.net", "zen.spamhaus.org", "b.barracudacentral.org", \
+#rbl_list = [ "bl.spamcop.net", "zen.spamhaus.org", "b.barracudacentral.org", \
+rbl_list = [ "bl.spamcop.net", "b.barracudacentral.org", \
 	"ips.backscatterer.org", "combined.njabl.org", "psbl.surriel.com", \
 	"dnsbl.sorbs.net", "combined.rbl.msrbl.net", \
 	"dnsbl-1.uceprotect.net", "bl.spamcannibal.org" ]
@@ -55,30 +54,34 @@ def test_rbl_list (testrecord="127.0.0.2", do_log=False):
 			print "Warning: lookup %s failed on %s rbl." % (check_name, rbl)
 
 def check_rbl_domain (domains, do_log=False):
-	"""discover all mx of a domain and check rbl status"""
+	"""discover all MX of a domain and check rbl status"""
 	"""to easily check if smtp changes over the time"""
 	for domain in domains:
 		# MX lookup to get all smtp server
 		DNS.DiscoverNameServers()
 		mx_hosts = DNS.mxlookup(domain)
-		for mx in mx_hosts:
-			addr = socket.gethostbyname(mx[1])
-			if do_log: print "Host %s resolves to %s" % (mx[1], addr)
-			# generate IPv4 reverse
-			addr_parts = string.split(addr, '.')
-			addr_parts.reverse()
-			for rbl in rbl_list:
-				check_name = "%s.%s" % (string.join(addr_parts, '.'), rbl)
-				# try to resolv the reverse + list(ex: 117.38.23.94.bl.spamcop.net)
-				# return 127.0.0.x, depending on the list
-				try: check_addr = socket.gethostbyname(check_name)
-				# if it returns nothing, it's ok
-				except socket.error:
-					check_addr = None
-					if do_log:
-						print "No returns for %s on %s (%s)" % (check_name, rbl, check_addr)
-				if check_addr != None:
-					print "%s [%s] seems to be listed in %s (%s -> %s)" % (mx[1], addr, rbl, check_name, check_addr)
+		if mx_hosts:
+			for mx in mx_hosts:
+				addr = socket.gethostbyname(mx[1])
+				if do_log: print "Host %s resolves to %s" % (mx[1], addr)
+				# generate IPv4 reverse
+				addr_parts = string.split(addr, '.')
+				addr_parts.reverse()
+				for rbl in rbl_list:
+					check_name = "%s.%s" % (string.join(addr_parts, '.'), rbl)
+					# try to resolv the reverse + list(ex: 117.38.23.94.bl.spamcop.net)
+					# return 127.0.0.x, depending on the list
+					try: check_addr = socket.gethostbyname(check_name)
+					# if it returns nothing, it's ok
+					except socket.error:
+						check_addr = None
+						if do_log:
+							print "No returns for %s on %s (%s)" % (check_name, rbl, check_addr)
+					if check_addr != None:
+						print "%s [%s] seems to be listed in %s (%s -> %s)" % (mx[1], addr, rbl, check_name, check_addr)
+		else:
+			print "No MX found for %s domain" % domain
+			return 1
 
 def check_rbl_host (hosts, do_log=False):
 	"""test if a host address is listed on a RBL list"""
@@ -108,19 +111,9 @@ def check_rbl_host (hosts, do_log=False):
 	
 def cb(option, opt_str, value, parser):
 	"""Callback to have multiple args in list"""
-	args=[]
-	for arg in parser.rargs:
-		if arg[0] != "-":
-			args.append(arg)
-		else:
-			del parser.rargs[:len(args)]
-			break
-	if getattr(parser.values, option.dest):
-		args.extend(getattr(parser.values, option.dest))
-	setattr(parser.values, option.dest, args)
+	setattr(parser.values, option.dest, value.split(','))
 
-def main():
-
+if __name__ == "__main__":
 	usage = "Usage: %prog [options] arg1 arg2"
 	description = "Check if smtp servers are in RBL lists"
 	parser = OptionParser(usage, description=description)
@@ -135,42 +128,29 @@ def main():
 			  help="Check (test 127.0.0.2) configured RBL only and exit")
 
 	parser.add_option("-d", "--domains",
+			  type="string",
 			  action="callback",
 			  callback=cb,
-			  metavar="domain1 [domain2 ...]",
 			  dest="domains",
-			  help="Test ip address of MX(s) on specified domain(s)")
+			  help="Comma separated list of dns domain name to test (autodetect MX)")
 
 	parser.add_option("-s", "--servers",
+			  type="string",
 			  action="callback",
 			  callback=cb,
-			  metavar="server1 [server2 ...]",
 			  dest="servers",
-			  help="Server(s) address to test (FQDN or ip address)")
+			  help="Comma separated list of server(s) to test (FQDN or ip address)")
 
 	(options, args) = parser.parse_args()
 
-	if len(args) == 0:
-		parser.error("Please give arguments; -h, --help for details")
-
+	# FIXME
 	if options.check:
 		test_rbl_list(do_log=options.verbose)
-
-	if options.domains:
-		check_rbl_domain(options.domains,do_log=options.verbose)
-
-	if options.servers:
-		check_rbl_host(options.servers,do_log=options.verbose)
-		
-if __name__ == "__main__":
-	main ()
-
-# dns lookup
-#	DNS.DiscoverNameServers()
-#	request= DNS.DnsRequest(name='www.iroqwa.org', qtype='A')
-#	try:	
-#		result = request.req()
-#		print result.answers
-#	except DNS.Error:
-#		print "error"
-
+	else:
+		if options.domains:
+			check_rbl_domain(options.domains,do_log=options.verbose)
+		else:
+			if options.servers:
+				check_rbl_host(options.servers,do_log=options.verbose)
+			else:
+				parser.error('Please provided arguments. (-h/--help for help)')
