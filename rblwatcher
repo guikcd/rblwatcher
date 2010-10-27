@@ -80,10 +80,13 @@ def check_rbl_host (hosts, do_log=False):
 	for host in hosts:
 		try:
 			# try to resolve ip if fqdn given
+			# TODO: try to detect IPv4 address, to avoid gethostbyname()
 			if do_log: print "Trying to resolve %s" % host
 			ipaddress = socket.gethostbyname(host)
 			if ipaddress != host:
 				if do_log: print "Host %s resolves to %s" % (host, ipaddress)
+			else:
+				if do_log: print "Host %s is already an IPv4 address (%s)" % (host, ipaddress)
 
 			addr_parts = string.split(ipaddress, '.')
 			addr_parts.reverse()
