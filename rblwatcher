@@ -35,6 +35,8 @@ rbl_list = [ "bl.spamcop.net", "b.barracudacentral.org", \
 	"dnsbl.sorbs.net", "combined.rbl.msrbl.net", \
 	"dnsbl-1.uceprotect.net", "bl.spamcannibal.org" ]
 
+version = "0.1"
+
 # escalation netbloc lists: dnsbl-2.uceprotect.net, dnsbl-3.uceprotect.net, spam.dnsbl.sorbs.net
 
 def test_rbl_list (testrecord="127.0.0.2", do_log=False):
@@ -115,8 +117,9 @@ def cb(option, opt_str, value, parser):
 
 if __name__ == "__main__":
 	usage = "Usage: %prog [options] arg1 arg2"
+	version_print = "%prog " + version
 	description = "Check if smtp servers are in RBL lists"
-	parser = OptionParser(usage, description=description)
+	parser = OptionParser(usage, description=description, version=version_print)
 
 	parser.add_option("-v", "--verbose",
 			  action="store_true",
