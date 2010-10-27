@@ -64,23 +64,13 @@ def check_rbl_domain (domains, do_log=False):
 		mx_hosts = DNS.mxlookup(domain)
 		if mx_hosts:
 			for mx in mx_hosts:
-				addr = socket.gethostbyname(mx[1])
-				if do_log: print "Host %s resolves to %s" % (mx[1], addr)
-				# generate IPv4 reverse
-				addr_parts = string.split(addr, '.')
-				addr_parts.reverse()
-				for rbl in rbl_list:
-					check_name = "%s.%s" % (string.join(addr_parts, '.'), rbl)
-					# try to resolv the reverse + list(ex: 117.38.23.94.bl.spamcop.net)
-					# return 127.0.0.x, depending on the list
-					try: check_addr = socket.gethostbyname(check_name)
-					# if it returns nothing, it's ok
-					except socket.error:
-						check_addr = None
-						if do_log:
-							print "No returns for %s on %s (%s)" % (check_name, rbl, check_addr)
-					if check_addr != None:
-						print "%s [%s] seems to be listed in %s (%s -> %s)" % (mx[1], addr, rbl, check_name, check_addr)
+				# mx is a tuple that contain the priority and the server
+				# we want a list
+				mx_list = list(mx)
+				# Don't care the priority of the MX
+				del mx_list[0]
+				# test the server
+				check_rbl_host(mx_list, do_log=do_log)
 		else:
 			print "No MX found for %s domain" % domain
 			# TODO return
