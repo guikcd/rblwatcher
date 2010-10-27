@@ -146,16 +146,15 @@ if __name__ == "__main__":
 
 	(options, args) = parser.parse_args()
 
-	# TODO: call -s and -d together
+	# if no args, print the usage
+	if not options.domains and not options.servers and not options.check:
+		parser.print_usage()
 
-	# FIXME
 	if options.check:
 		test_rbl_list(do_log=options.verbose)
-	else:
-		if options.domains:
-			check_rbl_domain(options.domains,do_log=options.verbose)
-		else:
-			if options.servers:
-				check_rbl_host(options.servers,do_log=options.verbose)
-			else:
-				parser.error('Please provided arguments. (-h/--help for help)')
+
+	if options.domains:
+		check_rbl_domain(options.domains,do_log=options.verbose)
+
+	if options.servers:
+		check_rbl_host(options.servers,do_log=options.verbose)
