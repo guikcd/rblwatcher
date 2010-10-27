@@ -1,8 +1,8 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
-# rblwatch - Watch if smtp server(s) is/are listed in a RBL
-# 	     Quiet by default to cron use
-#	     Require dns python module (ex.: python-dns on Debian like)
+# rblwatcher - Watch if smtp server(s) is/are listed in a RBL
+# 	       Quiet by default to cron use
+#	       Require dns python module (ex.: python-dns on Debian like)
 #
 # Copyright (C) 2010  Guillaume Delacour <gui@iroqwa.org>
 # based on http://www.fiction.net/blong/programs/python/rbl.py
@@ -37,13 +37,14 @@ rbl_list = [ "bl.spamcop.net", "b.barracudacentral.org", \
 
 version = "0.1"
 
-# escalation netbloc lists: dnsbl-2.uceprotect.net, dnsbl-3.uceprotect.net, spam.dnsbl.sorbs.net
+# escalation netbloc lists: dnsbl-2.uceprotect.net, \
+#dnsbl-3.uceprotect.net, spam.dnsbl.sorbs.net
 
 def test_rbl_list (testrecord="127.0.0.2", do_log=False):
-	"""test if 2.0.0.127.rbl.list record exist on RBL"""
+	"""Test if 2.0.0.127.rbl.list record exist on RBL"""
 	"""this avoid mistaken RBL definition"""
-	"""(as the check is ok if no 127.0.0.2 record is returned, we're not sure"""
-	"""rbl is correct or not)"""
+	"""(as the check is ok if no 127.0.0.2 record is returned, """
+	"""we're not sure RBL is correct or not)"""
 	if do_log: print "Testing RBL lists"
 	for rbl in rbl_list:
 		try:
@@ -53,11 +54,10 @@ def test_rbl_list (testrecord="127.0.0.2", do_log=False):
 			check_addr = socket.gethostbyname(check_name)
 			if do_log: print "OK: %s returns %s for %s" % (rbl, check_addr, check_name)
 		except socket.error:
-			print "Warning: lookup %s failed on %s rbl." % (check_name, rbl)
+			print "Warning: lookup %s failed on %s RBL." % (check_name, rbl)
 
 def check_rbl_domain (domains, do_log=False):
-	"""discover all MX of a domain and check rbl status"""
-	"""to easily check if smtp changes over the time"""
+	"""Discover all MX servers of a domain and check the status of each in RBL"""
 	for domain in domains:
 		# MX lookup to get all smtp server
 		DNS.DiscoverNameServers()
@@ -76,7 +76,7 @@ def check_rbl_domain (domains, do_log=False):
 			# TODO return
 
 def check_rbl_host (hosts, do_log=False):
-	"""test if a host address is listed on a RBL list"""
+	"""Test if a host is listed on a RBL list"""
 	for host in hosts:
 		try:
 			# try to resolve ip if fqdn given
@@ -89,8 +89,9 @@ def check_rbl_host (hosts, do_log=False):
 			addr_parts.reverse()
 			for rbl in rbl_list:
 				check_name = "%s.%s" % (string.join(addr_parts, '.'), rbl)
-				# try to resolve the reverse + list(ex: 117.38.23.94.bl.spamcop.net)
-				# return 127.0.0.x, depending on the list
+				# try to resolve reverse + list
+				# (ex: 117.38.23.94.bl.spamcop.net)
+				# return 127.0.0.x if listed, depending on the list
 				try: check_addr = socket.gethostbyname(check_name)
 				# if it returns nothing, it's ok
 				except socket.error:
