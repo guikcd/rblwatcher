@@ -142,7 +142,7 @@ if __name__ == "__main__":
 
 	# if no args, print the usage
 	if not options.domains and not options.servers and not options.check:
-		parser.print_usage()
+		parser.print_help()
 
 	if options.check:
 		test_rbl_list(do_log=options.verbose)
