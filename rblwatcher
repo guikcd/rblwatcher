@@ -35,26 +35,16 @@ rbl_list = [ "bl.spamcop.net", "b.barracudacentral.org", \
 	"dnsbl.sorbs.net", "combined.rbl.msrbl.net", \
 	"dnsbl-1.uceprotect.net", "bl.spamcannibal.org" ]
 
-version = "0.1"
+version = "0.2"
+
+# testrecords
+# record that souldn't be found
+testrecord_notfound = "127.0.0.1"
+# record that sould be found
+testrecord_found = "127.0.0.2"
 
 # escalation netbloc lists: dnsbl-2.uceprotect.net, \
 #dnsbl-3.uceprotect.net, spam.dnsbl.sorbs.net
-
-def test_rbl_list (testrecord="127.0.0.2", do_log=False):
-	"""Test if 2.0.0.127.rbl.list record exist on RBL"""
-	"""this avoid mistaken RBL definition"""
-	"""(as the check is ok if no 127.0.0.2 record is returned, """
-	"""we're not sure RBL is correct or not)"""
-	if do_log: print "Testing RBL lists"
-	for rbl in rbl_list:
-		try:
-			addr_parts = string.split(testrecord, '.')
-			addr_parts.reverse()
-			check_name = "%s.%s" % (string.join(addr_parts, '.'), rbl)
-			check_addr = socket.gethostbyname(check_name)
-			if do_log: print "OK: %s returns %s for %s" % (rbl, check_addr, check_name)
-		except socket.error:
-			print "Warning: lookup %s failed on %s RBL." % (check_name, rbl)
 
 def check_rbl_domain (domains, do_log=False):
 	"""Discover all MX servers of a domain and check the status of each in RBL"""
@@ -73,9 +63,8 @@ def check_rbl_domain (domains, do_log=False):
 				check_rbl_host(mx_list, do_log=do_log)
 		else:
 			print "No MX found for %s domain" % domain
-			# TODO return
 
-def check_rbl_host (hosts, do_log=False):
+def check_rbl_host (hosts, do_log=False, testmode=False):
 	"""Test if a host is listed on a RBL list"""
 	for host in hosts:
 		try:
@@ -85,8 +74,11 @@ def check_rbl_host (hosts, do_log=False):
 			ipaddress = socket.gethostbyname(host)
 			if ipaddress != host:
 				if do_log: print "Host %s resolves to %s" % (host, ipaddress)
+			# host is an ipaddress
 			else:
-				if do_log: print "Host %s is already an IPv4 address (%s)" % (host, ipaddress)
+				if do_log:
+					temp = socket.gethostbyaddr(host)
+					print "Reverse(s) of %s: %s" % (host, temp)
 
 			addr_parts = string.split(ipaddress, '.')
 			addr_parts.reverse()
@@ -99,12 +91,12 @@ def check_rbl_host (hosts, do_log=False):
 				# if it returns nothing, it's ok
 				except socket.error:
 					check_addr = None
-					if do_log:
+					if do_log or testmode:
 						print "No returns for %s on %s (%s)" % (check_name, rbl, check_addr)
 				if check_addr != None:
 					print "%s seems to be listed in %s (%s -> %s)" % (ipaddress, rbl, check_name, check_addr)
 		except socket.error: print "Name or service not known"
-	
+
 def cb(option, opt_str, value, parser):
 	"""Callback to have multiple args in list"""
 	setattr(parser.values, option.dest, value.split(','))
@@ -122,7 +114,7 @@ if __name__ == "__main__":
 	parser.add_option("-c", "--check-rbl",
 			  action="store_true",
 			  dest="check",
-			  help="Check (test 127.0.0.2) configured RBL only and exit")
+			  help="Check testrecords (127.0.0.1 and 127.0.0.2 by default) on configured RBL only and exit")
 
 	parser.add_option("-d", "--domains",
 			  type="string",
@@ -145,7 +137,10 @@ if __name__ == "__main__":
 		parser.print_help()
 
 	if options.check:
-		test_rbl_list(do_log=options.verbose)
+		print "In test mode, two lookup tests are made:"
+		print " - %s should    be found on RBLs" % testrecord_found
+		print " - %s shouldn't be found on RBLs" % testrecord_notfound
+		check_rbl_host([ testrecord_found, testrecord_notfound ], do_log=options.verbose, testmode=True)
 
 	if options.domains:
 		check_rbl_domain(options.domains,do_log=options.verbose)
