@@ -1,10 +1,11 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
-# rblwatcher - Watch if smtp server(s) is/are listed in a RBL
+# rblwatcher - Watch if smtp server(s) or URIs are listed in blacklists.
 #            Quiet by default to use with cron
 #            Require dns python module (ex.: python-dns on Debian like)
+# TODO: functions must return something !
 #
-# Copyright (C) 2010  Guillaume Delacour <gui@iroqwa.org>
+# Copyright (C) 2011  Guillaume Delacour <gui@iroqwa.org>
 # based on http://www.fiction.net/blong/programs/python/rbl.py
 #
 # This program is free software: you can redistribute it and/or modify
@@ -40,13 +41,20 @@ rbl_list = [ "bl.spamcop.net", \
              "dnsbl-1.uceprotect.net", \
              "bl.spamcannibal.org" ]
 
-version = "0.2"
+uribl_list = [ "multi.uribl.com",
+               "multi.surbl.org" ]
+
+version = "0.3"
 
 # testrecords
 # record that souldn't be found
-testrecord_notfound = "127.0.0.1"
+rbl_testrecord_notfound = "127.0.0.1"
 # record that sould be found
-testrecord_found = "127.0.0.2"
+rbl_testrecord_found = "127.0.0.2"
+# http://www.uribl.com/about.shtml
+uribl_testrecord_found = "test.uribl.com"
+# http://www.surbl.org/guidelines
+surbl_testrecord_found = "test.surbl.org"
 
 # escalation netbloc lists: dnsbl-2.uceprotect.net, \
 #dnsbl-3.uceprotect.net, spam.dnsbl.sorbs.net
@@ -107,6 +115,25 @@ def check_rbl_host (hosts, do_log=False, testmode=False):
         except socket.error:
             print "Name or service not known"
 
+def check_uribl (uris, do_log=False):
+    """Test if uris are listed on URI DNSBLs"""
+    for uri in uris:
+        for uri_bl in uribl_list:
+            # ex.: domain.tld.multi.uribl.com
+            check_name = "%s.%s" % (uri, uri_bl)
+            # return 127.0.0.x if listed, depending on the list
+            try:
+                check_addr = socket.gethostbyname(check_name)
+            # if it returns nothing, it's ok
+            except socket.error, (err, errstr):
+                check_addr = None
+                if do_log:
+                    print "No returns for %s on %s ([%s] %s)" % \
+                        (check_name, uri_bl, err, errstr)
+            if check_addr != None:
+                print "%s seems to be listed in %s (%s -> %s)" % \
+                        (uri, uri_bl, check_name, check_addr)
+
 def callback(option, opt_str, value, parser):
     """Callback to have multiple args in list"""
     setattr(parser.values, option.dest, value.split(','))
@@ -114,48 +141,60 @@ def callback(option, opt_str, value, parser):
 if __name__ == "__main__":
     USAGE = "Usage: %prog [options] arg1 arg2"
     VERSION_PRINT = "%prog " + version
-    DESCRIPTION = "Check if smtp servers are in RBL lists"
+    DESCRIPTION = "Check if smtp servers or URIs are in blacklists"
     parser = OptionParser(USAGE, description=DESCRIPTION, version=VERSION_PRINT)
 
     parser.add_option("-v", "--verbose",
               action="store_true",
               help="Verbose output")
 
-    parser.add_option("-c", "--check-rbl",
+    parser.add_option("-c", "--check",
               action="store_true",
               dest="check",
-              help="Check testrecords on configured RBL only and exit")
+              help="Check testrecords on configured RBL and URI DNSBL and exit (implies verbose mode)")
 
     parser.add_option("-d", "--domains",
               type="string",
               action="callback",
               callback=callback,
               dest="domains",
-              help="Comma separated list of dns domain name to test")
+              help="Comma separated list of dns domain name to test (ex.: example.org")
 
     parser.add_option("-s", "--servers",
               type="string",
               action="callback",
               callback=callback,
               dest="servers",
-              help="Comma separated list of FQDN or ip address to test")
+              help="Comma separated list of FQDN or ip address to test (ex.: host.domain.tld or 127.0.0.1")
+
+    parser.add_option("-u", "--uris",
+              type="string",
+              action="callback",
+              callback=callback,
+              dest="uris",
+              help="Comma separated list of URIs to test (ex.: domain.tld")
 
     (options, args) = parser.parse_args()
 
     # if no args, print the USAGE
-    if not options.domains and not options.servers and not options.check:
+    if not options.domains and not options.servers and not options.check and not options.uris:
         parser.print_help()
 
     if options.check:
         print "In test mode, two lookup tests are made:"
-        print " - %s should    be found on RBLs" % testrecord_found
-        print " - %s shouldn't be found on RBLs" % testrecord_notfound
-        check_rbl_host([ testrecord_found, testrecord_notfound ],
+        print " - %s should    be found on RBLs" % rbl_testrecord_found
+        print " - %s shouldn't be found on RBLs" % rbl_testrecord_notfound
+        check_rbl_host([ rbl_testrecord_found, rbl_testrecord_notfound ],
                                            do_log=options.verbose,
                                            testmode=True)
+        check_uribl([ uribl_testrecord_found, surbl_testrecord_found ],
+                                           do_log=options.verbose)
 
     if options.domains:
         check_rbl_domain(options.domains, do_log=options.verbose)
 
     if options.servers:
         check_rbl_host(options.servers, do_log=options.verbose)
+
+    if options.uris:
+        check_uribl(options.uris, do_log=options.verbose)
